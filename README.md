@@ -22,12 +22,20 @@ task list, team workflow, and schedule.
 
 ## Quickstart
 
-No environment spec exists yet (that's one of the backlog tasks!). Until
-then, any Python 3.10+ with `numpy` and `matplotlib` installed will do:
+Use the Conda/Miniforge environment spec to create an isolated Python
+3.10+ environment with the core workshop dependencies:
 
 ```sh
-pip install numpy matplotlib
+conda env create -f environment.yml
+conda activate astro-data-challenge
 python -m astrolab.pipeline
+```
+
+If you want to try the optional live-sky bonus in `astrolab.realdata`,
+install `astroquery` separately so the core offline pipeline stays lean:
+
+```sh
+conda install -n astro-data-challenge -c conda-forge 'astroquery>=0.4,<1'
 ```
 
 You should see it load the 5 sample frames and then stop with:

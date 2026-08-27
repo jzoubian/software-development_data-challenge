@@ -1,0 +1,11 @@
+name: astro-data-challenge
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10,<3.14
+  - numpy>=1.26,<3
+  - matplotlib>=3.8,<4
+  - pandas>=2.2,<3
+
+# Optional bonus dependency for astrolab.realdata.fetch_sky_image:
+#   conda install -n astro-data-challenge -c conda-forge astroquery>=0.4,<1
