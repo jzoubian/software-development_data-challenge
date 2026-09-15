@@ -7,6 +7,8 @@ conflicts during the Day 2 integration session - that's by design, not a
 bug: it's the one place every team's PR touches.
 """
 
+import numpy as np
+
 from astrolab.io import load_frame_set
 from astrolab.synth import SAMPLE_FRAMES_DIR, regenerate_sample_data
 
@@ -39,13 +41,33 @@ def detect_sources(frame):
     raise NotImplementedError("detect_sources: implement source detection")
 
 
+def _aperture_sum(frame, x, y, radius=2):
+    """Sum pixels in a circular aperture centered at ``(x, y)``."""
+    if radius < 0:
+        raise ValueError("radius must be non-negative")
+
+    height, width = frame.shape
+    x = int(round(x))
+    y = int(round(y))
+    x_start = max(0, x - radius)
+    x_stop = min(width, x + radius + 1)
+    y_start = max(0, y - radius)
+    y_stop = min(height, y + radius + 1)
+
+    aperture_y, aperture_x = np.mgrid[y_start:y_stop, x_start:x_stop]
+    aperture_x -= x
+    aperture_y -= y
+    mask = aperture_x**2 + aperture_y**2 <= radius**2
+    return frame[y_start:y_stop, x_start:x_stop][mask].sum()
+
+
 def measure_photometry(frame, sources):
     """Measure the brightness of each detected source.
 
-    TODO(backlog): implement simple aperture photometry, returning a
-    table (e.g. a pandas DataFrame) of source -> flux.
+    Return ``(x, y, flux)`` records for each source. Table construction can
+    be layered on top of these measurements by the pipeline integration step.
     """
-    raise NotImplementedError("measure_photometry: implement aperture photometry")
+    return [(x, y, _aperture_sum(frame, x, y)) for x, y in sources]
 
 
 def compose_image(frame):

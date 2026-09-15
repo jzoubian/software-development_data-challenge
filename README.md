@@ -1,4 +1,4 @@
-# Astro Data Challenge
+# Astro Data Challenge g
 
 Build a tiny astro-image pipeline, together, as a team, over one evening
 and one morning.
