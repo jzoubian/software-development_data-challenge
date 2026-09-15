@@ -1,70 +1,198 @@
 # Astro Data Challenge
 
-Build a tiny astro-image pipeline, together, as a team, over one evening
-and one morning.
+Build a tiny astronomy-image pipeline as a team.
 
-**Mission**: turn 5 noisy exposures of the same star field into one clean,
-nice-looking composite image, with a table of the brightness of every
-star found along the way.
+## Mission
 
-```
+Turn five noisy exposures of the same star field into one clean composite
+image, with a table showing the brightness of every detected source.
+
+```text
 load frames → stack/denoise → detect sources → measure photometry → composite
 ```
 
-## Status: foundation layer only, on purpose
+## Status
 
-This repo currently contains just enough to load the sample frames and
-watch the pipeline stop at the first unimplemented step. That's
-intentional: there's no environment spec, no CI, no docs, no tests, and
-most of the actual pipeline is missing. Those gaps are the workshop
-backlog — see the course repo's `5-data-challenge/README.md` for the full
-task list, team workflow, and schedule.
+The core image pipeline is implemented.
+
+The pipeline can:
+
+1. Load five synthetic image frames.
+2. Combine the frames using mean stacking.
+3. Detect bright sources using thresholding and local maxima.
+4. Measure source brightness using simple aperture photometry.
+5. Create a display-ready image using contrast stretching.
+
+The project also includes an optional real-sky bonus feature. This downloads
+an image from the Digitized Sky Survey using `astroquery` and sends it through
+the same source-detection, photometry, and image-composition steps.
+
+## Installation
+
+Use Python 3.10 or newer.
+
+Install the required packages:
+
+```sh
+pip install numpy pandas matplotlib astroquery
+```
 
 ## Quickstart
 
-No environment spec exists yet (that's one of the backlog tasks!). Until
-then, any Python 3.10+ with `numpy` and `matplotlib` installed will do:
+Run the normal synthetic pipeline:
 
 ```sh
-pip install numpy matplotlib
 python -m astrolab.pipeline
 ```
 
-You should see it load the 5 sample frames and then stop with:
+The synthetic pipeline automatically generates the sample frames if they are
+missing. The generated data is deterministic and does not require internet
+access.
 
+The pipeline performs the following steps:
+
+```text
+Loading frames
+    ↓
+Stacking frames
+    ↓
+Detecting sources
+    ↓
+Measuring photometry
+    ↓
+Composing final image
 ```
-NotImplementedError: stack_frames: implement frame stacking
+
+## Real-sky bonus feature
+
+Run the real-sky pipeline with:
+
+```sh
+python -m astrolab.pipeline --real
 ```
 
-That's expected — you've just reached backlog item #1.
+The real-sky pipeline fetches an image of M42, the Orion Nebula, from the
+Digitized Sky Survey using `astroquery.skyview`.
 
-To poke at the raw frames first (e.g. plot them before diving into the
-pipeline code), see [`notebooks/explore_frames.ipynb`](notebooks/explore_frames.ipynb).
+The image is saved as a NumPy `.npy` file in:
+
+```text
+data/real/
+```
+
+If the cached file already exists, the pipeline loads it instead of making
+another network request.
+
+### Reproducibility and network trade-off
+
+The normal synthetic pipeline is deterministic and works offline. It uses
+generated sample frames with a fixed seed, so the same data can be recreated
+consistently.
+
+The real-sky pipeline depends on:
+
+- An internet connection for the first download.
+- The availability of the remote SkyView service.
+- The selected target, survey, and image size.
+
+After the first successful download, the image is cached locally. This makes
+later runs faster and reduces dependence on the network.
+
+The real-sky image is not guaranteed to be identical to every future remote
+request unless the cached `.npy` file is preserved.
 
 ## Code layout
 
-- `astrolab/synth.py` — deterministic synthetic star-field generator
-  (no download needed; same seed always produces the same data).
-- `astrolab/io.py` — loading/saving frames (`.npy` files, numpy arrays).
-- `astrolab/pipeline.py` — orchestrates the processing steps. Most of
-  them (`stack_frames`, `detect_sources`, `measure_photometry`,
-  `compose_image`) are stubs — this file is the shared entry point every
-  team's work plugs into, so expect it to be a frequent source of merge
-  conflicts during integration. That's by design.
-- `data/frames/*.npy` — 5 synthetic, noisy exposures of the same field
-  (128×128 pixels, 25 stars), generated with `astrolab.synth`, seed 42.
-  Gitignored — generated, not committed. `astrolab.pipeline.run()`
-  regenerates it automatically the first time it's missing, so a fresh
-  clone/fork just works; run `python -m astrolab.synth` directly if you
-  want the frames without running the pipeline (e.g. for the notebook).
-  Output is byte-identical every time.
-- `astrolab/realdata.py` — **bonus feature, stubbed**: fetch a real
-  telescope image (e.g. the Orion Nebula) live from a public sky-survey
-  archive via `astroquery`, instead of a synthetic frame, for a genuine
-  "real astro image" payoff. Not required for the core pipeline — the
-  rest of the pipeline stays deterministic and offline by design.
-- `notebooks/explore_frames.ipynb` — loads and plots the sample frames,
-  for a quick look at the input data before touching `pipeline.py`.
+- `astrolab/synth.py` — deterministic synthetic star-field generator.
+- `astrolab/io.py` — loading and saving NumPy frame files.
+- `astrolab/pipeline.py` — orchestrates the full image-processing pipeline.
+- `astrolab/realdata.py` — downloads and caches a real sky image using
+  `astroquery.skyview`.
+- `data/frames/*.npy` — generated synthetic image frames.
+- `data/real/*.npy` — cached real-sky images.
+- `notebooks/explore_frames.ipynb` — loads and plots the sample frames for
+  exploration.
+
+## Pipeline functions
+
+The main functions in `astrolab.pipeline` are:
+
+- `stack_frames(frames)` — combines multiple frames using mean stacking.
+- `detect_sources(frame)` — finds bright sources using a threshold and local
+  maximum detection.
+- `measure_photometry(frame, sources)` — calculates the brightness of each
+  detected source.
+- `compose_image(frame)` — applies contrast stretching and returns a
+  display-ready image.
+- `run(real=False)` — runs the complete pipeline using either synthetic frames
+  or a real sky image.
+
+## Running the two pipeline modes
+
+### Synthetic mode
+
+```sh
+python -m astrolab.pipeline
+```
+
+This mode uses the generated sample frames and does not require internet
+access.
+
+### Real-sky mode
+
+```sh
+python -m astrolab.pipeline --real
+```
+
+This mode uses the cached real image if available. If no cached image exists,
+it downloads the image from SkyView and saves it under `data/real`.
+
+## Development
+
+Check the current Git status:
+
+```sh
+git status
+```
+
+View the changes made locally:
+
+```sh
+git diff
+```
+
+Run the available tests:
+
+```sh
+pytest
+```
+
+If pytest reports:
+
+```text
+collected 0 items
+no tests ran
+```
+
+the repository currently contains no test files, so pytest has not executed
+any tests.
+
+## Team workflow
+
+Each team works on its own Git branch. Changes to shared files such as
+`astrolab/pipeline.py` and `README.md` may cause merge conflicts during
+integration. These conflicts are expected because multiple tasks intentionally
+modify the same files.
+
+Before submitting the work:
+
+```sh
+git add astrolab/pipeline.py astrolab/realdata.py README.md
+git commit -m "Implement real sky image pipeline"
+git push -u origin task-3-real-pipeline
+```
+
+Then open a pull request on GitHub for the team’s branch.
 
 ## License
 
