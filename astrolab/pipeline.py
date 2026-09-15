@@ -1,83 +1,131 @@
-"""Pipeline orchestration - the shared entry point everyone's work plugs into.
+"""Pipeline orchestration - the shared entry point everyone's work plugs into."""
 
-This file is intentionally incomplete: most steps below are stubs. Each
-stub is a task in the Session 5 backlog (see 5-data-challenge/README.md
-in the course repo). Expect this file to be a frequent source of merge
-conflicts during the Day 2 integration session - that's by design, not a
-bug: it's the one place every team's PR touches.
-"""
+import numpy as np
+import pandas as pd
 
 from astrolab.io import load_frame_set
+from astrolab.realdata import fetch_sky_image
 from astrolab.synth import SAMPLE_FRAMES_DIR, regenerate_sample_data
 
 
 def _ensure_sample_frames():
-    """Generate the sample frames if missing.
-
-    data/frames/ is gitignored (generated, not source) - a fresh clone or
-    fork starts without it, so regenerate deterministically from the same
-    seed rather than requiring a manual step.
-    """
+    """Generate the sample frames if missing."""
     if not SAMPLE_FRAMES_DIR.is_dir() or not any(SAMPLE_FRAMES_DIR.glob("*.npy")):
         regenerate_sample_data()
 
 
 def stack_frames(frames):
-    """Combine several noisy frames of the same field into one.
+    """Combine several noisy frames using mean stacking."""
+    if not frames:
+        raise ValueError("frames must not be empty")
 
-    TODO(backlog): implement mean or median stacking to reduce noise.
-    """
-    raise NotImplementedError("stack_frames: implement frame stacking")
+    return np.mean(np.stack(frames), axis=0)
 
 
 def detect_sources(frame):
-    """Find point sources (stars) in a frame.
+    """Find bright point sources using thresholding and local maxima."""
+    frame = np.asarray(frame)
 
-    TODO(backlog): implement threshold + local-maxima detection,
-    returning a list of (x, y) pixel coordinates.
-    """
-    raise NotImplementedError("detect_sources: implement source detection")
+    background = np.median(frame)
+    noise = np.std(frame)
+    threshold = background + 5 * noise
+
+    candidates = frame > threshold
+
+    padded = np.pad(frame, 1, mode="edge")
+    local_maximum = np.ones_like(frame, dtype=bool)
+
+    for dy in range(3):
+        for dx in range(3):
+            if dx == 1 and dy == 1:
+                continue
+
+            neighbour = padded[dy:dy + frame.shape[0], dx:dx + frame.shape[1]]
+            local_maximum &= frame >= neighbour
+
+    ys, xs = np.where(candidates & local_maximum)
+
+    return list(zip(xs.tolist(), ys.tolist()))
 
 
 def measure_photometry(frame, sources):
-    """Measure the brightness of each detected source.
+    """Measure source brightness using simple aperture photometry."""
+    frame = np.asarray(frame)
+    background = np.median(frame)
 
-    TODO(backlog): implement simple aperture photometry, returning a
-    table (e.g. a pandas DataFrame) of source -> flux.
-    """
-    raise NotImplementedError("measure_photometry: implement aperture photometry")
+    rows = []
+
+    for source_id, (x, y) in enumerate(sources):
+        y_min = max(0, y - 2)
+        y_max = min(frame.shape[0], y + 3)
+        x_min = max(0, x - 2)
+        x_max = min(frame.shape[1], x + 3)
+
+        aperture = frame[y_min:y_max, x_min:x_max]
+        flux = float(np.sum(aperture - background))
+
+        rows.append(
+            {
+                "source": source_id,
+                "x": x,
+                "y": y,
+                "flux": flux,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=["source", "x", "y", "flux"])
 
 
 def compose_image(frame):
-    """Turn a raw frame into a nice display image.
+    """Apply contrast stretching and return a display-ready image."""
+    frame = np.asarray(frame, dtype=float)
 
-    TODO(backlog): implement contrast stretching / a false-color
-    composite for the final "hero image".
-    """
-    raise NotImplementedError("compose_image: implement display composition")
+    low = np.percentile(frame, 1)
+    high = np.percentile(frame, 99)
+
+    if high <= low:
+        return np.zeros_like(frame, dtype=np.uint8)
+
+    image = np.clip((frame - low) / (high - low), 0, 1)
+    return (image * 255).astype(np.uint8)
 
 
-def run():
-    """Run the full pipeline end to end, printing progress as it goes."""
-    print("Loading frames...")
-    _ensure_sample_frames()
-    frames = load_frame_set()
-    print(f"  loaded {len(frames)} frames of shape {frames[0].shape}")
+def run(real=False):
+    """Run the full pipeline using synthetic or real sky data."""
+    if real:
+        print("Loading real sky image...")
+        frame = fetch_sky_image()
+        print(f"  loaded real image of shape {frame.shape}")
+    else:
+        print("Loading frames...")
+        _ensure_sample_frames()
+        frames = load_frame_set()
+        print(f"  loaded {len(frames)} frames of shape {frames[0].shape}")
 
-    print("Stacking frames...")
-    stacked = stack_frames(frames)
+        print("Stacking frames...")
+        frame = stack_frames(frames)
 
     print("Detecting sources...")
-    sources = detect_sources(stacked)
+    sources = detect_sources(frame)
     print(f"  found {len(sources)} sources")
 
     print("Measuring photometry...")
-    table = measure_photometry(stacked, sources)
+    table = measure_photometry(frame, sources)
     print(table)
 
     print("Composing final image...")
-    return compose_image(stacked)
+    return compose_image(frame)
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        help="Use the cached or downloaded real sky image",
+    )
+    args = parser.parse_args()
+
+    run(real=args.real)
